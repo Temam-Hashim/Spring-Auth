@@ -9,6 +9,7 @@ import com.security.auth.exception.NotFoundException;
 import com.security.auth.exception.UnAuthorizedException;
 import com.security.auth.repositary.UserRepository;
 import io.micrometer.common.util.StringUtils;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -72,7 +73,8 @@ public class authController {
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<Object> refreshToken(@RequestBody Map<String, String> request) {
+    public ResponseEntity<Object> refreshToken(@Valid  @RequestBody Map<String, String> request) {
+        try{
         String refreshToken = request.get("refreshToken");
 
         if (StringUtils.isBlank(refreshToken)) {
@@ -80,15 +82,20 @@ public class authController {
         }
 
         String username = jwtUtils.extractUsername(refreshToken);
-        var userDetails = userRepository.findByEmail(username).orElseThrow(()->new NotFoundException("No user found with this email"));
+        Users userDetails = userRepository.findByEmail(username).orElseThrow(()->new NotFoundException("No user found with this email"));
 
-        if (jwtUtils.isRefreshTokenValid(refreshToken, userDetails)) {
+        if (!jwtUtils.isRefreshTokenValid(refreshToken, userDetails)) {
+            throw new UnAuthorizedException("Invalid or expired refresh token.");
+        }
+
             String newAccessToken = jwtUtils.generateToken(userDetails);
             Map<String, String> map = new HashMap<>();
             map.put("accessToken", newAccessToken);
             return ResponseEntity.ok(map);
-        } else {
-            throw new UnAuthorizedException("Invalid or expired refresh token.");
+
+        } catch (AuthenticationException e) {
+            // Handle authentication failure
+            throw new UnAuthorizedException("Invalid Refresh token");
         }
     }
 
